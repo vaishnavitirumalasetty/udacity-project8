@@ -1,0 +1,56 @@
+name: Backend CD
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: starter/backend
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      - run: pip install pipenv
+      - run: pipenv install --dev
+      - run: pipenv run lint
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: starter/backend
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      - run: pip install pipenv
+      - run: pipenv install --dev
+      - run: pipenv run test
+  build:
+    needs: [lint, test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: us-east-1
+      - uses: aws-actions/amazon-ecr-login@v1
+      - run: |
+          cd starter/backend
+          docker build -t ${{ secrets.BACKEND_ECR_REPOSITORY }}:${{ github.sha }}.
+          docker push ${{ secrets.BACKEND_ECR_REPOSITORY }}:${{ github.sha }}
+      - uses: aws-actions/amazon-eks-update-kubeconfig@v2
+        with:
+          cluster-name: cluster
+          aws-region: us-east-1
+      - run: |
+          cd starter/backend/k8s
+          kustomize edit set image backend=${{ secrets.BACKEND_ECR_REPOSITORY }}:${{ github.sha }}
+          kustomize build | kubectl apply -f -
