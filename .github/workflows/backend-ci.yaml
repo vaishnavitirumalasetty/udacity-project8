@@ -40,4 +40,4 @@ jobs:
     needs: [lint, test]
     steps:
       - uses: actions/checkout@v4
-      - run: docker build -t mp-backend./starter/backend
+      - run: docker build -t mp-backend ./starter/backend
