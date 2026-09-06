@@ -19,8 +19,8 @@ jobs:
       - uses: aws-actions/amazon-ecr-login@v2
       - name: Build and push
         run: |
-          docker build -t ${{ secrets.ECR_REGISTRY }}/mp-frontend:latest./starter/frontend
-          docker push ${{ secrets.ECR_REGISTRY }}/mp-frontend:latest
+          docker build -t ${{ secrets.ECR_REGISTRY }}/mp-frontend:latest ./starter/frontend
+          docker push ${{ secrets.ECR_REGISTRY }}/mp-frontend :latest
       - name: Deploy to EKS
         run: |
           aws eks update-kubeconfig --name ${{ secrets.EKS_CLUSTER_NAME }} --region ${{ secrets.AWS_REGION }}
