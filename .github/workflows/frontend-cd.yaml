@@ -2,57 +2,27 @@ name: Frontend CD
 on:
   push:
     branches: [main]
+    paths:
+      - 'starter/frontend/**'
   workflow_dispatch:
+
 jobs:
-  lint:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: starter/frontend
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-node@v3
-        with:
-          node-version: 18
-          cache: npm
-          cache-dependency-path: starter/frontend/package-lock.json
-      - run: npm ci
-      - run: npm run lint
-  test:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: starter/frontend
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-node@v3
-        with:
-          node-version: 18
-          cache: npm
-          cache-dependency-path: starter/frontend/package-lock.json
-      - run: npm ci
-      - run: npm run test
-  build:
-    needs: [lint, test]
+  deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: aws-actions/configure-aws-credentials@v2
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
-          aws-region: us-east-1
-      - uses: aws-actions/amazon-ecr-login@v1
-      - run: |
-          cd starter/frontend
-          docker build --build-arg=REACT_APP_MOVIE_API_URL=${{ secrets.REACT_APP_MOVIE_API_URL }} -t ${{ secrets.FRONTEND_ECR_REPOSITORY }}:${{ github.sha }}.
-          docker push ${{ secrets.FRONTEND_ECR_REPOSITORY }}:${{ github.sha }}
-      - uses: aws-actions/amazon-eks-update-kubeconfig@v2
-        with:
-          cluster-name: cluster
-          aws-region: us-east-1
-      - run: |
-          cd starter/frontend/k8s
-          kustomize edit set image frontend=${{ secrets.FRONTEND_ECR_REPOSITORY }}:${{ github.sha }}
-          kustomize build | kubectl apply -f -
+          aws-region: ${{ secrets.AWS_REGION }}
+      - uses: aws-actions/amazon-ecr-login@v2
+      - name: Build and push
+        run: |
+          docker build -t ${{ secrets.ECR_REGISTRY }}/mp-frontend:latest./starter/frontend
+          docker push ${{ secrets.ECR_REGISTRY }}/mp-frontend:latest
+      - name: Deploy to EKS
+        run: |
+          aws eks update-kubeconfig --name ${{ secrets.EKS_CLUSTER_NAME }} --region ${{ secrets.AWS_REGION }}
+          kubectl set image deployment/frontend frontend=${{ secrets.ECR_REGISTRY }}/mp-frontend:latest
+          kubectl rollout status deployment/frontend
